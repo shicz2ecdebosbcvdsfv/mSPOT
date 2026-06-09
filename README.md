@@ -1,4 +1,6 @@
 # mSPOT
+Test data can be downloaded via the link: https://1drv.ms/f/c/9fc402e7b03923ac/IgDSe3eNWO0-RKN2OHEHd3Z8Aau0xUfDVptlxQWmggeQ100?e=fsOcBl
+
 Command line in Linux
 Basecalling and read length filter:
 1. dorado basecaller dna_r10.4.1_e8.2_400bps_sup@v5.0.0 pod5/ --kit-name SQK-NBD114-24 --device cuda:all --no-trim > calls_notrim.bam
