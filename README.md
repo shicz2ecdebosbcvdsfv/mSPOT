@@ -3,7 +3,6 @@ Test data can be downloaded via the link: https://1drv.ms/f/c/9fc402e7b03923ac/I
 
 Given that pod5 file is too large, we uploaded fasta file after step 1-3. Reviewers can run step 4-12 to verify data processing. “calls.fa” is the initial file.
 
-Command line in Linux
 Basecalling and read length filter:
 1. dorado basecaller dna_r10.4.1_e8.2_400bps_sup@v5.0.0 pod5/ --kit-name SQK-NBD114-24 --device cuda:all --no-trim > calls_notrim.bam
 
