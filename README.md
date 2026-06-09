@@ -1,5 +1,6 @@
 # mSPOT
 Test data can be downloaded via the link: https://1drv.ms/f/c/9fc402e7b03923ac/IgDSe3eNWO0-RKN2OHEHd3Z8Aau0xUfDVptlxQWmggeQ100?e=fsOcBl
+Given that pod5 file is too large, we uploaded fasta file after step 1-3. Reviewers can run step 4-12 to verify data processing. “calls.fa” is the initial file.
 
 Command line in Linux
 Basecalling and read length filter:
@@ -39,5 +40,3 @@ samtools: 1.13
 https://github.com/samtools/samtools
 
 Installation guide can be obtained via their github. Their installation is very fast and can be used directly after installation.
-
-Given that pod5 file is too large, we uploaded fasta file after step 1-3. Reviewers can run step 4-12 to verify data processing. “calls.fa” is the initial file.
