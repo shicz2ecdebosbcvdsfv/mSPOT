@@ -174,10 +174,3 @@ If you use the mSPOT pipeline or design scripts in your research, please cite:
 
 ---
 
-## License
-
-*[Add your license here, e.g., MIT / GPL-3.0 / CC-BY-4.0]*
-
-## Contact
-
-For questions regarding the computational pipeline or sequence design, please open an issue in this repository or contact the corresponding author.
