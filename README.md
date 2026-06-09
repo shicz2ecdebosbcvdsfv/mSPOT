@@ -1,227 +1,183 @@
-# mSPOT
+# mSPOT: Multiplexed DNAzyme-based Sensing with Parallel Optical Transduction
 
-Given that pod5 file is too large, we uploaded a short fasta file used for testing after step 1-3. Reviewers can run Part B step 4-12 to verify data processing. “calls.fa” is the initial file.
+> **Note on Data Availability**  
+> Raw `pod5` signal files are too large for GitHub storage. We provide a short FASTA file (`calls.fa`) for testing the downstream bioinformatics pipeline. Reviewers can execute **Part B, Steps 4–12** directly to verify data processing.
 
-## Part A. Design of domains of multiplexed DNAzyme and barcode sequence of Barcoded reporters
 
-Python:
 
-## 1. Design of Domains of Multiplexed DNAzyme
+## Overview
 
-Generation of DNAzyme domains with constrained sequence length, GC content, and minimum Hamming distance to minimize cross-reactivity among multiplexed DNAzymes.
+This repository contains the computational design scripts and bioinformatics pipeline for **mSPOT**, a multiplexed DNAzyme sensing platform coupled with Oxford Nanopore Technologies (ONT) sequencing for parallel readout.
 
-```python
-from itertools import product
+- **Part A** – Python scripts for designing multiplexed DNAzyme catalytic domains and nanopore barcode sequences with constrained sequence properties (GC content, distance metrics, homopolymer limits).
+- **Part B** – Shell commands for basecalling, demultiplexing, alignment, and read-length analysis of nanopore sequencing data.
 
-def hamming_distance(seq1, seq2):
-    """Compute the Hamming distance between two sequences"""
-    return sum(c1 != c2 for c1, c2 in zip(seq1, seq2))
 
-def is_valid_sequence(candidate, sequences, min_distance):
-    """Check if a new sequence meets the Hamming distance requirement within the set"""
-    for seq in sequences:
-        if hamming_distance(candidate, seq) < min_distance:
-            return False
-    return True
 
-def gc_content(sequence):
-    """Calculate the total number of G and C in the sequence"""
-    return sequence.count('G') + sequence.count('C')
 
-def find_gc_filtered_sequences(sequence_length, symbols, min_distance, gc_min, gc_max):
-    """Find sequences satisfying GC content constraints and Hamming distance requirements"""
-    all_sequences = list(product(symbols, repeat=sequence_length))
-    valid_sequences = []
+## Part A: Sequence Design
 
-    for seq in all_sequences:
-        if is_valid_sequence(seq, valid_sequences, min_distance):
-            valid_sequences.append(seq)
+### 1. DNAzyme Domain Design
 
-    gc_filtered_sequences = [
-        seq for seq in valid_sequences
-        if gc_min <= gc_content(seq) <= gc_max
-    ]
+**File:** `script/DomainsDesign.py`
 
-    return len(gc_filtered_sequences), ["".join(seq) for seq in gc_filtered_sequences]
+Generates DNAzyme catalytic domains with constrained sequence length, GC content, and **minimum Hamming distance** to minimize cross-reactivity among multiplexed DNAzymes.
 
-sequence_length = 6
-symbols = ['A', 'G', 'C', 'T']
-min_distance = 4
-gc_min = 2
-gc_max = 4
+**Parameters used in this study:**
 
-count, sequences = find_gc_filtered_sequences(
-    sequence_length,
-    symbols,
-    min_distance,
-    gc_min,
-    gc_max
-)
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `sequence_length` | 6 nt | Domain length |
+| `symbols` | A, G, C, T | Nucleotide alphabet |
+| `min_distance` | 4 | Minimum Hamming distance |
+| `gc_min` / `gc_max` | 2 / 4 | Total G+C count per domain |
 
-print(f"Number of sequences satisfying the conditions: {count}")
-print("The sequences are:")
-print(sequences)
+**Usage:**
+
+```bash
+python script/DomainsDesign.py
+```
+
+**Output:** 56 sequences satisfying all constraints (Hamming distance ≥ 4, GC count 2–4).
+
+---
+
+### 2. Nanopore Barcode Design
+
+**File:** `script/BarcodeDesign.py`
+
+Generates 24-nt barcode sequences for nanopore sequencing with constraints on **Levenshtein distance**, **GC content**, and **homopolymer length** to ensure robust barcode discrimination and basecalling accuracy.
+
+**Parameters:**
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `num_sequences` | 112 | Number of barcodes to generate |
+| `seq_length` | 24 nt | Barcode length |
+| `min_levenshtein_distance` | 10 | Minimum Levenshtein distance between any two barcodes |
+| `max_homopolymer` | 2 | Maximum allowed homopolymer run (e.g., `AA` allowed, `AAA` forbidden) |
+| `gc_content_range` | 0.4 – 0.6 | Fractional GC content |
+
+**Usage:**
+
+```bash
+python script/BarcodeDesign.py
+```
+
+
+
+---
+
+## Part B: Nanopore Data Processing
+
+### Prerequisites
+
+| Tool | Version | Installation |
+|------|---------|--------------|
+| [Dorado](https://github.com/nanoporetech/dorado) | ≥ 0.7.0 | `conda install -c nanoporetech dorado` or pre-built binary |
+| [SeqKit](https://github.com/shenwei356/seqkit) | 2.6.1 | `conda install -c bioconda seqkit` |
+| [BWA](https://github.com/lh3/bwa) | 0.7.17-r1188 | `conda install -c bioconda bwa` |
+| [Samtools](https://github.com/samtools/samtools) | 1.13 | `conda install -c bioconda samtools` |
+
+All tools are available via Bioconda and install in minutes.
+
+---
+
+### Basecalling & Demultiplexing
+
+```bash
+# 1. Basecalling (SUP model, all CUDA devices, native barcode kit, no trimming)
+dorado basecaller dna_r10.4.1_e8.2_400bps_sup@v5.0.0 pod5/ \
+    --kit-name SQK-NBD114-24 \
+    --device cuda:all \
+    --no-trim > calls_notrim.bam
+
+# 2. Demultiplexing & FASTQ generation
+dorado demux -t 200 \
+    --emit-summary \
+    --emit-fastq \
+    --kit-name SQK-NBD114-24 \
+    -v \
+    --output-dir calls.fq \
+    calls_notrim.bam
+
+# 3. Convert FASTQ to FASTA
+seqkit fq2fa calls.fq > calls.fa
 ```
 
 ---
 
-## 2. Design of Barcode Sequences for Nanopore Sequencing
+### Read Length Filtering
 
-Generation of 24-nt barcode sequences for nanopore sequencing with constraints on Levenshtein distance, GC content, and homopolymer length to ensure robust barcode discrimination and sequencing accuracy.
-
-```python
-import random
-import csv
-
-random.seed(42)
-
-num_sequences = 112
-seq_length = 24
-min_levenshtein_distance = 10
-max_homopolymer = 2
-gc_content_range = (0.4, 0.6)
-
-nucleotides = ['A', 'T', 'C', 'G']
-
-def levenshtein(s1, s2):
-    if len(s1) < len(s2):
-        return levenshtein(s2, s1)
-
-    if len(s2) == 0:
-        return len(s1)
-
-    previous_row = range(len(s2) + 1)
-
-    for i, c1 in enumerate(s1):
-        current_row = [i + 1]
-
-        for j, c2 in enumerate(s2):
-            insertions = previous_row[j + 1] + 1
-            deletions = current_row[j] + 1
-            substitutions = previous_row[j] + (c1 != c2)
-
-            current_row.append(
-                min(insertions, deletions, substitutions)
-            )
-
-        previous_row = current_row
-
-    return previous_row[-1]
-
-def has_long_homopolymer(seq, max_run):
-    count = 1
-    last = seq[0]
-
-    for nt in seq[1:]:
-        if nt == last:
-            count += 1
-
-            if count > max_run:
-                return True
-        else:
-            count = 1
-            last = nt
-
-    return False
-
-def gc_content(seq):
-    gc = seq.count('G') + seq.count('C')
-    return gc / len(seq)
-
-def generate_random_sequence():
-    return ''.join(
-        random.choices(
-            nucleotides,
-            k=seq_length
-        )
-    )
-
-sequences = []
-attempts = 0
-max_attempts = 100000
-
-while len(sequences) < num_sequences and attempts < max_attempts:
-
-    attempts += 1
-
-    candidate = generate_random_sequence()
-
-    if has_long_homopolymer(candidate, max_homopolymer):
-        continue
-
-    gc_frac = gc_content(candidate)
-
-    if not (
-        gc_content_range[0]
-        <= gc_frac
-        <= gc_content_range[1]
-    ):
-        continue
-
-    if all(
-        levenshtein(candidate, existing)
-        >= min_levenshtein_distance
-        for existing in sequences
-    ):
-        sequences.append(candidate)
-
-output_file = 'dna_sequences_levenshtein.csv'
-
-with open(output_file, 'w', newline='') as csvfile:
-
-    writer = csv.writer(csvfile)
-
-    writer.writerow(['Index', 'Sequence'])
-
-    for idx, seq in enumerate(sequences, 1):
-        writer.writerow([idx, seq])
-
-print(
-    f"Generation complete: "
-    f"{len(sequences)} sequences saved to {output_file}"
-)
+```bash
+# 4. Filter reads by length (55–77 nt)
+seqkit seq -m 55 -M 77 calls.fa > calls_m55M77.fa
 ```
-## Part B. Data processing of nanopore sequencing
 
-Linux
+---
 
-Basecalling and read length filter:
+### Mapping & Counting
 
-1. dorado basecaller dna_r10.4.1_e8.2_400bps_sup@v5.0.0 pod5/ --kit-name SQK-NBD114-24 --device cuda:all --no-trim > calls_notrim.bam
+```bash
+# 5. Align filtered reads to reference (ONT-optimized preset)
+bwa mem -k 10 -x ont2d ref/ref.fa calls_m55M77.fa -t 200 > calls_m55M77.sam
 
-2. dorado demux -t 200 --emit-summary  --emit-fastq --kit-name SQK-NBD114-24 -v --output-dir calls.fq calls_notrim.bam
+# 6. Sort and convert to BAM
+samtools sort -@ 200 -O bam -o calls_m55M77.sorted.bam calls_m55M77.sam
 
-3. seqkit fq2fa calls.fq > calls.fa
+# 7. Index BAM
+samtools index calls_m55M77.sorted.bam
 
-4. seqkit seq -m55 -M77 calls.fa > calls_m55M77.fa
+# 8. Generate per-reference read counts
+samtools idxstats calls_m55M77.sorted.bam > calls_m55M77.txt
+```
 
-Mapping and counting:
+---
 
-5. bwa mem -k10 -x ont2d ref/ref.fa calls_m55M77.fa -t 200 > calls_m55M77.sam
+### Read Length Distribution
 
-6. samtools sort -@ 200 -O bam -o calls_m55M77.sorted.bam calls_m55M77.sam
+```bash
+# 9. Extract reads ≤ 150 nt for length distribution analysis
+seqkit seq -M 150 calls.fa > calls_M150.fa
 
-7. samtools index calls_m55M77.sorted.bam
+# 10. Extract lengths to tabular format
+seqkit fx2tab -j 30 -l -n -i -H calls_M150.fa | cut -f 2 > Length_calls_M150.txt
 
-8. samtools idxstats calls_m55M77.sorted.bam > calls_m55M77.txt
+# 11. Compute length-frequency table
+awk 'NR > 1 { print $1 }' Length_calls_M150.txt | \
+    sort | uniq -c | \
+    awk '{ print $2, $1 }' > Length_distribution_calls_M150.txt
 
+# 12. Import Length_distribution_calls_M150.txt into Excel
+#     to calculate percentage for each read length.
+```
 
-Read length distribution:
+---
 
-9. seqkit seq -M150 calls.fa > calls_M150.fa
+## Software Versions
 
-10. seqkit fx2tab -j 30 -l  -n -i -H  calls_M150.fa  |cut -f 2 > Length_calls_M150.txt
- 
-11. awk 'NR > 1 { print $1 }' Length_calls_M150.txt | sort | uniq -c | awk '{ print $2, $1 }' > Length_distribution_calls_M150.txt
+| Software | Version | URL |
+|----------|---------|-----|
+| SeqKit | 2.6.1 | https://github.com/shenwei356/seqkit |
+| BWA | 0.7.17-r1188 | https://github.com/lh3/bwa |
+| Samtools | 1.13 | https://github.com/samtools/samtools |
 
-12. Process Length_distribution_calls_M150.txt in excel to calculate percentage for each read length.
+Installation guides are available via their respective GitHub repositories. All tools install rapidly and are ready for immediate use after installation.
 
-Version:
-seqkit: 2.6.1
-https://github.com/shenwei356/seqkit
-bwa：0.7.17-r1188
-https://github.com/lh3/bwa
-samtools: 1.13
-https://github.com/samtools/samtools
+---
 
-Installation guide can be obtained via their github. Their installation is very fast and can be used directly after installation.
+## Citation
+
+If you use the mSPOT pipeline or design scripts in your research, please cite:
+
+> *[Manuscript citation to be added upon publication]*
+
+---
+
+## License
+
+*[Add your license here, e.g., MIT / GPL-3.0 / CC-BY-4.0]*
+
+## Contact
+
+For questions regarding the computational pipeline or sequence design, please open an issue in this repository or contact the corresponding author.
